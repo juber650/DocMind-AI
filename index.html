@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocMind AI - Chat with your PDFs</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Marked.js to render Markdown responses nicely -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-gray-800 border-b border-gray-700 p-4 shadow-md flex justify-between items-center">
+        <div class="flex items-center space-x-3">
+            <span class="text-2xl">🧠</span>
+            <h1 class="text-xl font-bold tracking-wide text-indigo-400">DocMind AI</h1>
+        </div>
+        <div id="status-badge" class="text-xs px-3 py-1 rounded-full bg-red-900 text-red-300 font-medium">
+            No PDF Uploaded
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="flex-1 flex overflow-hidden">
+        
+        <!-- Sidebar: File Upload & Stats -->
+        <aside class="w-80 bg-gray-800 border-r border-gray-700 p-5 flex flex-col justify-between">
+            <div class="space-y-6">
+                <div>
+                    <h2 class="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-3">Upload Document</h2>
+                    <label class="flex flex-col items-center justify-center border-2 border-dashed border-gray-600 rounded-lg p-6 cursor-pointer hover:border-indigo-500 transition bg-gray-900/50">
+                        <svg class="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                        </svg>
+                        <span id="file-label" class="text-sm text-gray-300 text-center truncate w-full">Choose a PDF file</span>
+                        <input type="file" id="pdf-file-input" accept=".pdf" class="hidden" onchange="handleFileSelect(event)">
+                    </label>
+                </div>
+
+                <button id="upload-btn" onclick="uploadPDF()" disabled class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-700 disabled:text-gray-500 text-white font-medium py-2.5 rounded-lg transition shadow-md">
+                    Process PDF
+                </button>
+
+                <!-- Document Stats Box -->
+                <div id="stats-box" class="hidden bg-gray-900/80 rounded-lg p-4 border border-gray-700 space-y-2">
+                    <h3 class="text-xs font-semibold uppercase text-indigo-400">Document Stats</h3>
+                    <p id="stat-filename" class="text-xs text-gray-300 truncate"><strong>File:</strong> -</p>
+                    <p id="stat-pages" class="text-xs text-gray-300"><strong>Pages:</strong> -</p>
+                    <p id="stat-chunks" class="text-xs text-gray-300"><strong>Chunks:</strong> -</p>
+                </div>
+            </div>
+
+            <div class="text-xs text-gray-500 text-center">
+                Powered by FastAPI, LangChain & Ollama
+            </div>
+        </aside>
+
+        <!-- Chat Section -->
+        <main class="flex-1 flex flex-col bg-gray-900">
+            <!-- Messages Box -->
+            <div id="chat-container" class="flex-1 overflow-y-auto p-6 space-y-6">
+                <!-- Welcome Message -->
+                <div class="flex items-start space-x-4">
+                    <div class="bg-indigo-600 text-white rounded-full h-8 w-8 flex items-center justify-center font-bold flex-shrink-0">AI</div>
+                    <div class="bg-gray-800 border border-gray-700 rounded-2xl p-4 max-w-2xl text-gray-200 shadow-sm">
+                        <p>Hello! Upload a PDF document using the sidebar, click <strong>Process PDF</strong>, and ask me anything about it.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input Box Area -->
+            <div class="p-4 bg-gray-800 border-t border-gray-700">
+                <form id="chat-form" onsubmit="sendMessage(event)" class="flex items-center space-x-3 max-w-4xl mx-auto">
+                    <input type="text" id="user-input" placeholder="Ask a question about your document..." autocomplete="off"
+                        class="flex-1 bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-gray-100 focus:outline-none focus:border-indigo-500 placeholder-gray-500 shadow-inner">
+                    <button type="submit" id="send-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-medium transition shadow-md flex items-center justify-center">
+                        Send
+                    </button>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        const API_BASE_URL = "http://127.0.0.1:8000";
+        let selectedFile = null;
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                selectedFile = file;
+                document.getElementById('file-label').innerText = file.name;
+                document.getElementById('upload-btn').disabled = false;
+            }
+        }
+
+        async function uploadPDF() {
+            if (!selectedFile) return;
+
+            const uploadBtn = document.getElementById('upload-btn');
+            const statusBadge = document.getElementById('status-badge');
+            uploadBtn.innerText = "Processing...";
+            uploadBtn.disabled = true;
+
+            const formData = new FormData();
+            formData.append("file", selectedFile);
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/upload`, {
+                    method: "POST",
+                    body: formData
+                });
+
+                if (!response.ok) throw new Error("Failed to process PDF");
+
+                const data = await response.json();
+
+                // Update UI Statuses
+                statusBadge.innerText = "Ready";
+                statusBadge.className = "text-xs px-3 py-1 rounded-full bg-green-900 text-green-300 font-medium";
+
+                // Show Stats
+                document.getElementById('stats-box').classList.remove('hidden');
+                document.getElementById('stat-filename').innerHTML = `<strong>File:</strong> ${data.filename}`;
+                document.getElementById('stat-pages').innerHTML = `<strong>Pages:</strong> ${data.pages}`;
+                document.getElementById('stat-chunks').innerHTML = `<strong>Chunks:</strong> ${data.chunks}`;
+
+                appendMessage("AI", `Successfully processed **${data.filename}** (${data.pages} pages, ${data.chunks} chunks created). You can now ask questions!`);
+            } catch (error) {
+                alert("Error uploading file: " + error.message);
+                statusBadge.innerText = "Error";
+                statusBadge.className = "text-xs px-3 py-1 rounded-full bg-red-900 text-red-300 font-medium";
+            } finally {
+                uploadBtn.innerText = "Process PDF";
+                uploadBtn.disabled = false;
+            }
+        }
+
+        async function sendMessage(event) {
+            event.preventDefault();
+            const inputField = document.getElementById('user-input');
+            const question = inputField.value.trim();
+            if (!question) return;
+
+            inputField.value = "";
+            appendMessage("You", question);
+
+            // Add loading bubble
+            const loadingId = appendLoadingMessage();
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/ask`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ question: question })
+                });
+
+                if (!response.ok) throw new Error("Failed to fetch response");
+
+                const data = await response.json();
+                removeLoadingMessage(loadingId);
+
+                appendMessage("AI", data.answer, data.sources);
+            } catch (error) {
+                removeLoadingMessage(loadingId);
+                appendMessage("AI", "Sorry, something went wrong or the server is unreachable.");
+            }
+        }
+
+        function appendMessage(sender, text, sources = []) {
+            const chatContainer = document.getElementById('chat-container');
+            const isUser = sender === "You";
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `flex items-start space-x-4 ${isUser ? 'flex-row-reverse space-x-reverse' : ''}`;
+
+            const avatar = document.createElement('div');
+            avatar.className = `${isUser ? 'bg-gray-700' : 'bg-indigo-600'} text-white rounded-full h-8 w-8 flex items-center justify-center font-bold flex-shrink-0`;
+            avatar.innerText = isUser ? 'U' : 'AI';
+
+            const contentWrapper = document.createElement('div');
+            contentWrapper.className = `bg-gray-800 border border-gray-700 rounded-2xl p-4 max-w-2xl text-gray-200 shadow-sm space-y-2`;
+
+            const textNode = document.createElement('div');
+            textNode.className = 'prose prose-invert text-sm';
+            textNode.innerHTML = isUser ? escapeHtml(text) : marked.parse(text);
+            contentWrapper.appendChild(textNode);
+
+            // If sources are attached, render source badges
+            if (sources && sources.length > 0) {
+                const sourcesDiv = document.createElement('div');
+                sourcesDiv.className = "flex flex-wrap gap-1.5 pt-2 border-t border-gray-700 mt-2";
+                
+                const titleLabel = document.createElement('span');
+                titleLabel.className = "text-xs text-gray-400 font-semibold mr-1 flex items-center";
+                titleLabel.innerText = "Sources:";
+                sourcesDiv.appendChild(titleLabel);
+
+                sources.forEach(src => {
+                    const badge = document.createElement('span');
+                    badge.className = "text-xs bg-gray-900 border border-gray-700 text-indigo-300 px-2 py-0.5 rounded-md";
+                    badge.innerText = src;
+                    sourcesDiv.appendChild(badge);
+                });
+                contentWrapper.appendChild(sourcesDiv);
+            }
+
+            messageDiv.appendChild(avatar);
+            messageDiv.appendChild(contentWrapper);
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function appendLoadingMessage() {
+            const chatContainer = document.getElementById('chat-container');
+            const id = 'loading-' + Date.now();
+
+            const messageDiv = document.createElement('div');
+            messageDiv.id = id;
+            messageDiv.className = `flex items-start space-x-4`;
+
+            messageDiv.innerHTML = `
+                <div class="bg-indigo-600 text-white rounded-full h-8 w-8 flex items-center justify-center font-bold flex-shrink-0">AI</div>
+                <div class="bg-gray-800 border border-gray-700 rounded-2xl p-4 text-gray-400 shadow-sm flex items-center space-x-2">
+                    <div class="w-2 h-2 bg-indigo-500 rounded-full animate-bounce"></div>
+                    <div class="w-2 h-2 bg-indigo-500 rounded-full animate-bounce [animation-delay:-.2s]"></div>
+                    <div class="w-2 h-2 bg-indigo-500 rounded-full animate-bounce [animation-delay:-.4s]"></div>
+                    <span class="text-xs ml-2">Thinking...</span>
+                </div>
+            `;
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            return id;
+        }
+
+        function removeLoadingMessage(id) {
+            const el = document.getElementById(id);
+            if (el) el.remove();
+        }
+
+        function escapeHtml(text) {
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+    </script>
+</body>
+</html>
