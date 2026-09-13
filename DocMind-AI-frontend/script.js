@@ -1,5 +1,5 @@
-const API_URL = "http://127.0.0.1:8000/ask";
-const UPLOAD_URL = "http://127.0.0.1:8000/upload";
+const API_URL = `${API_BASE_URL}/ask`;
+const API_BASE_URL = "https://docmind-ai-backend.onrender.com";
 
 const welcome = document.getElementById("welcome");
 const chat = document.getElementById("chat");
@@ -236,7 +236,7 @@ fileInput.addEventListener("change", async () => {
     formData.append("file", file);
 
     /* Upload PDF to FastAPI */
-    const response = await fetch(UPLOAD_URL, {
+    const response = await fetch(`${API_BASE_URL}/upload`, {
       method: "POST",
       body: formData
     });
